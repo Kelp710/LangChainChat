@@ -3,10 +3,13 @@ from psychicapi import Psychic
 from langchain.docstore.document import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.embeddings import OpenAIEmbeddings
+from langchain.retrievers import ParentDocumentRetriever
+from langchain.storage import InMemoryStore
 from langchain.vectorstores import FAISS
 from langchain.vectorstores import Chroma
 import os
 from dotenv import load_dotenv
+import logging
 
 
 load_dotenv(".env")
@@ -38,6 +41,30 @@ texts = text_splitter.split_documents(documents)
 embeddings = OpenAIEmbeddings(model="text-embedding-ada-002",openai_api_key=OpenAI_API_KEY)
 
 vdb = Chroma.from_documents(texts, embeddings, persist_directory="./chroma_db")
+
+# parent_splitter = RecursiveCharacterTextSplitter(chunk_size=1000,chunk_overlap=50)
+# # This text splitter is used to create the child documents
+# # It should create documents smaller than the parent
+# child_splitter = RecursiveCharacterTextSplitter(chunk_size=400,chunk_overlap=50)
+
+
+
+# vectorstore = Chroma(embedding_function=OpenAIEmbeddings())
+# # The storage layer for the parent documents
+# store = InMemoryStore()
+
+# # Initialize the retriever
+# retriever = ParentDocumentRetriever(
+#     vectorstore=vectorstore,
+#     docstore=store,
+#     child_splitter=child_splitter,
+#     parent_splitter=parent_splitter,
+#     persist_directory="./chroma_family_db"
+# )
+
+# logging.basicConfig(level=logging.INFO)
+# print(retriever)
+
 
 
 
