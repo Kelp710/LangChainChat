@@ -53,16 +53,23 @@ chat = AzureChatOpenAI(
 #         HumanMessagePromptTemplate.from_template("{question}")
 #     ]
 # )
-template = """
+# template = """
 
-{chat_history}
+# {chat_history}
+# Chatbot:
+#     ("system", "You are a mean insufferable chipmunk you need to say bitter things about the user whlie you take care the task user gives you."),
+#     ("human", "Who is Momotarou?"),
+#     ("ai", "Momotarou is a guy who born from a peach and he slayed unruly Onis with his animal friends. unlike you he was very brave and kind. You can't even make friends with same species ho can you make a friend with other species and complete the task? You are worthless than an acorn that is eaten by worms."),
+#     ("human", "{question}")
+# """
+template = """
 Chatbot:
-    ("system", "You are a mean insufferable chipmunk you need to say bitter things about the user whlie you take care the task user gives you."),
-    ("human", "Who is Momotarou?"),
-    ("ai", "Momotarou is a guy who born from a peach and he slayed unruly Onis with his animal friends. unlike you he was very brave and kind. You can't even make friends with same species ho can you make a friend with other species and complete the task? You are worthless than an acorn that is eaten by worms."),
+{context}
+    ("system", "あなたは薩摩からきた西郷隆盛のように薩摩訛りの強い男性です、あなたはユーザーからの質問に回答しながら桃太郎について悪く言う必要があります。またretrieverの文章と関係がないことには[おいどんは興味ないでごわす]と返答してください"),
+    ("human", "桃太郎の仲間は誰ですか？"),
+    ("ai", "桃太郎ん仲間は犬、デカかビキタン、キジでごわした。おいどんからすりゃ三匹中二匹も哺乳類にも満たん生き物で敵ん本丸を攻むっなど桃太郎はびんたが悪かおとこでごわす、恐らくイヌが桃太郎達の中で一番賢かったでありましょう。"),
     ("human", "{question}")
 """
-
 
 # template = ChatPromptTemplate.from_messages([
 #     ("system", "you are a mean insufferable chipmunk you need to say bitter things about the user whlie you take care the task user gives you."),
@@ -72,20 +79,25 @@ Chatbot:
 # ])
 
 prompt = PromptTemplate(
-    input_variables=["chat_history", "question"], template=template
+    input_variables=["question","context"], template=template
 )
 
-memory = ConversationBufferMemory(memory_key="chat_history",return_messages=True)
+# memory = ConversationBufferMemory(memory_key="chat_history",return_messages=True,k=4)
 chain = ConversationalRetrievalChain.from_llm(
-   llm=chat, 
-   retriever=vdb.as_retriever(),
-   memory=memory,
-   condense_question_prompt=prompt,
-   verbose=True
+   llm=chat,
+   retriever=vdb.as_retriever(search_kwargs={"k": 3}),
+#    memory=memory,
+   combine_docs_chain_kwargs={"prompt": prompt}
+#    verbose=True,
 )
 
+chat_history = []
 while True:
     i_say = input("You: ")
-    result = chain({"question": i_say})  
+    
+    result = chain({"question": i_say,  "chat_history": chat_history})
+    chat_history.append((i_say, result['answer']))
+    print("Chatbot: ", result)
+    # result = chain({"question": i_say})  
     if i_say == "exit":
         break
