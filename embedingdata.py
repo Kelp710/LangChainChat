@@ -34,37 +34,31 @@ Document(
 ) for doc in raw_docs
 ]
 
-text_splitter = RecursiveCharacterTextSplitter(chunk_size=300,
-                                                chunk_overlap=50)
-texts = text_splitter.split_documents(documents)
+# text_splitter = RecursiveCharacterTextSplitter(chunk_size=300,
+#                                                 chunk_overlap=50)
+# texts = text_splitter.split_documents(documents)
 
-embeddings = OpenAIEmbeddings(model="text-embedding-ada-002",openai_api_key=OpenAI_API_KEY)
+# embeddings = OpenAIEmbeddings(model="text-embedding-ada-002",openai_api_key=OpenAI_API_KEY)
 
-vdb = Chroma.from_documents(texts, embeddings, persist_directory="./chroma_db")
+# vdb = Chroma.from_documents(texts, embeddings, persist_directory="./chroma_db")
 
-# parent_splitter = RecursiveCharacterTextSplitter(chunk_size=1000,chunk_overlap=50)
-# # This text splitter is used to create the child documents
-# # It should create documents smaller than the parent
-# child_splitter = RecursiveCharacterTextSplitter(chunk_size=400,chunk_overlap=50)
-
-
-
-# vectorstore = Chroma(embedding_function=OpenAIEmbeddings())
-# # The storage layer for the parent documents
-# store = InMemoryStore()
-
-# # Initialize the retriever
-# retriever = ParentDocumentRetriever(
-#     vectorstore=vectorstore,
-#     docstore=store,
-#     child_splitter=child_splitter,
-#     parent_splitter=parent_splitter,
-#     persist_directory="./chroma_family_db"
-# )
-
-# logging.basicConfig(level=logging.INFO)
-# print(retriever)
+parent_splitter = RecursiveCharacterTextSplitter(chunk_size=1000,chunk_overlap=50)
+# This text splitter is used to create the child documents
+# It should create documents smaller than the parent
+child_splitter = RecursiveCharacterTextSplitter(chunk_size=400,chunk_overlap=50)
 
 
 
+vectorstore = Chroma(embedding_function=OpenAIEmbeddings(), persist_directory="./chroma_family_db")
+# The storage layer for the parent documents
+store = InMemoryStore()
 
+# Initialize the retriever
+retriever = ParentDocumentRetriever(
+    vectorstore=vectorstore,
+    docstore=store,
+    child_splitter=child_splitter,
+    parent_splitter=parent_splitter,
+   
+)
+retriever.add_documents(documents,None)
