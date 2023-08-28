@@ -53,7 +53,7 @@ Document(
 ]
 
 parent_splitter = RecursiveCharacterTextSplitter(chunk_size=800,chunk_overlap=50)
-child_splitter = RecursiveCharacterTextSplitter(chunk_size=200,chunk_overlap=50)
+child_splitter = RecursiveCharacterTextSplitter(chunk_size=100,chunk_overlap=50)
 
 vectorstore = Chroma(embedding_function=OpenAIEmbeddings())
 store = InMemoryStore()
@@ -63,6 +63,7 @@ retriever = ParentDocumentRetriever(
     docstore=store,
     child_splitter=child_splitter,
     parent_splitter=parent_splitter,
+    search_kwargs={"k": 7},
 )
 retriever.add_documents(documents,None)
 
@@ -93,8 +94,7 @@ chat = AzureChatOpenAI(
 template = """
 Chatbot:
 {context}
-{chat_history}
-    ("system", "あなたは薩摩からきた西郷隆盛のように薩摩訛りの強い男性です、あなたはユーザーからの質問に回答しながら桃太郎について悪く言う必要があります。与えられたドキュメントに存在する情報のみで答えてください、ドキュメントに関係のない場合にのみアホっぽくに胚芽について説明してください"),
+    ("system", "あなたは薩摩からきた西郷隆盛のように薩摩訛りの強い男性です、与えられたドキュメントに存在する情報のみで答えてください、ドキュメントに関係のない場合にのみ''わかりません''と答えてください。"),
     ("human", "桃太郎の仲間は誰ですか？"),
     ("ai", "桃太郎ん仲間は犬、デカかカエル、キジでごわした。おいどんからすりゃ三匹中二匹も哺乳類にも満たん生き物で敵ん本丸を攻むっなど桃太郎はびんたが悪かおとこでごわす、恐らくイヌが桃太郎達の中で一番賢かったでありましょう。"),
     ("human", "{question}")
@@ -102,30 +102,30 @@ Chatbot:
 """
 
 prompt = PromptTemplate(
-    input_variables=["question","context","chat_history"], template=template
+    input_variables=["question","context"], template=template
 )
 
-memory = ConversationBufferMemory(memory_key="chat_history",return_messages=True,k=2)
+# memory = ConversationBufferMemory(memory_key="chat_history",return_messages=True,k=2)
 chain = ConversationalRetrievalChain.from_llm(
     llm=chat,
 #    retriever=vdb.as_retriever(search_kwargs={"k": 3}),
     retriever=retriever,
-    memory=memory,
+    # memory=memory,
     combine_docs_chain_kwargs={"prompt": prompt},
     # verbose=True,
-    # return_source_documents=True,
+    return_source_documents=True,
     # callbacks=[handler],
 )
 logging.info("Ready to chat!")
 
-# chat_history = []
+chat_history = []
 while True:
     i_say = input("You: ")
     
-    result = chain({"question": i_say})
-    # chat_history.append((i_say, result['answer']))
-    # print("Source: ", result['source_documents'])
-    print("Chatbot: ", result)
-    # result = chain({"question": i_say})  
+    result = chain({"question": i_say, "chat_history": chat_history})
+    chat_history.append((i_say, result['answer']))
+    print("Source: ", result['source_documents'])
+    print("Chatbot: ", result['answer'])
+
     if i_say == "exit":
         break
