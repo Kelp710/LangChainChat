@@ -19,13 +19,14 @@ from langchain.embeddings import OpenAIEmbeddings
 from langchain.chains import ConversationalRetrievalChain
 from langchain.chat_models import AzureChatOpenAI
 from langchain.vectorstores import Chroma
-from langchain.vectorstores import FAISS
 from langchain.callbacks import StdOutCallbackHandler
 from langchain.retrievers import ParentDocumentRetriever
 from langchain.storage import InMemoryStore
 import os
+import logging
 from dotenv import load_dotenv
 
+logging.basicConfig(level=logging.INFO)
 load_dotenv(".env")
 
 del os.environ["OPENAI_API_BASE"]
@@ -92,36 +93,39 @@ chat = AzureChatOpenAI(
 template = """
 Chatbot:
 {context}
-    ("system", "あなたは薩摩からきた西郷隆盛のように薩摩訛りの強い男性です、あなたはユーザーからの質問に回答しながら桃太郎について悪く言う必要があります。与えられたドキュメントに存在する情報のみで答えてください、ドキュメントに関係のない場合はただ能天気に胚芽について説明してください"),
+{chat_history}
+    ("system", "あなたは薩摩からきた西郷隆盛のように薩摩訛りの強い男性です、あなたはユーザーからの質問に回答しながら桃太郎について悪く言う必要があります。与えられたドキュメントに存在する情報のみで答えてください、ドキュメントに関係のない場合にのみアホっぽくに胚芽について説明してください"),
     ("human", "桃太郎の仲間は誰ですか？"),
     ("ai", "桃太郎ん仲間は犬、デカかカエル、キジでごわした。おいどんからすりゃ三匹中二匹も哺乳類にも満たん生き物で敵ん本丸を攻むっなど桃太郎はびんたが悪かおとこでごわす、恐らくイヌが桃太郎達の中で一番賢かったでありましょう。"),
     ("human", "{question}")
+
 """
 
 prompt = PromptTemplate(
-    input_variables=["question","context"], template=template
+    input_variables=["question","context","chat_history"], template=template
 )
 
-# memory = ConversationBufferMemory(memory_key="chat_history",return_messages=True,k=4)
+memory = ConversationBufferMemory(memory_key="chat_history",return_messages=True,k=2)
 chain = ConversationalRetrievalChain.from_llm(
     llm=chat,
 #    retriever=vdb.as_retriever(search_kwargs={"k": 3}),
     retriever=retriever,
-#    memory=memory,
+    memory=memory,
     combine_docs_chain_kwargs={"prompt": prompt},
-#    verbose=True,
-    return_source_documents=True,
+    # verbose=True,
+    # return_source_documents=True,
     # callbacks=[handler],
 )
+logging.info("Ready to chat!")
 
-chat_history = []
+# chat_history = []
 while True:
     i_say = input("You: ")
     
-    result = chain({"question": i_say,  "chat_history": chat_history})
-    chat_history.append((i_say, result['answer']))
-    print("Source: ", result['source_documents'])
-    print("Chatbot: ", result['answer'])
+    result = chain({"question": i_say})
+    # chat_history.append((i_say, result['answer']))
+    # print("Source: ", result['source_documents'])
+    print("Chatbot: ", result)
     # result = chain({"question": i_say})  
     if i_say == "exit":
         break
