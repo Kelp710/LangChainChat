@@ -1,3 +1,4 @@
+
 from langchain.prompts import PromptTemplate
 from psychicapi import Psychic
 from langchain.docstore.document import Document
@@ -10,6 +11,15 @@ from langchain.vectorstores import Chroma
 from langchain.callbacks import StdOutCallbackHandler
 from langchain.retrievers import ParentDocumentRetriever
 from langchain.storage import InMemoryStore
+from langchain.retrievers.multi_vector import MultiVectorRetriever
+from langchain.embeddings import OpenAIEmbeddings
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.chat_models import ChatOpenAI
+from langchain.prompts import ChatPromptTemplate
+from langchain.schema.output_parser import StrOutputParser
+import uuid
+from langchain.schema.document import Document
+
 import os
 import logging
 from dotenv import load_dotenv
@@ -40,24 +50,53 @@ Document(
 ) for doc in raw_docs
 ]
 
-parent_splitter = RecursiveCharacterTextSplitter(chunk_size=400,chunk_overlap=50)
-child_splitter = RecursiveCharacterTextSplitter(chunk_size=150,chunk_overlap=20)
+text_splitter = RecursiveCharacterTextSplitter(chunk_size=300,chunk_overlap=20)
+documents = text_splitter.split_documents(documents)
 
-vectorstore = Chroma(embedding_function=OpenAIEmbeddings())
+vectorstore = Chroma(collection_name="full_documents",embedding_function=OpenAIEmbeddings())
+
+chain = (
+    {"doc": lambda x: x.page_content}
+    | ChatPromptTemplate.from_template("Summarize the following document in Japanese:\n\n{doc}")
+    | ChatOpenAI(max_retries=0)
+    | StrOutputParser()
+)
+vectorstore = Chroma(
+    collection_name="summaries",
+    embedding_function=OpenAIEmbeddings()
+)
+summaries = chain.batch(documents, {"max_concurrency": 3})
+
 store = InMemoryStore()
 # Initialize the retriever
-retriever = ParentDocumentRetriever(
+id_key = "doc_id"
+retriever = MultiVectorRetriever(
     vectorstore=vectorstore,
     docstore=store,
-    child_splitter=child_splitter,
-    parent_splitter=parent_splitter,
-    search_kwargs={"k": 3},
+    search_kwargs={"k": 9},
+    id_key=id_key,
 )
+import uuid
+doc_ids = [str(uuid.uuid4()) for _ in documents]
 
-retriever.add_documents(documents,None)
+summary_docs = [Document(page_content=s+"💚",metadata={id_key: doc_ids[i]}) for i, s in enumerate(summaries)]
 
-# embeddings = OpenAIEmbeddings(model="text-embedding-ada-002",openai_api_key=OpenAI_API_KEY)
-# vdb = Chroma(persist_directory="./chroma_db", embedding_function=embeddings)
+child_text_splitter = RecursiveCharacterTextSplitter(chunk_size=150,chunk_overlap=20)
+
+sub_docs = []
+for i, doc in enumerate(documents):
+    _id = doc_ids[i]
+    _sub_docs = child_text_splitter.split_documents([doc])
+    for _doc in _sub_docs:
+        _doc.metadata[id_key] = _id
+    sub_docs.extend(_sub_docs)
+retriever.vectorstore.add_documents(summary_docs)
+retriever.vectorstore.add_documents(sub_docs)
+
+print(str(retriever))
+print(str(summary_docs))
+retriever.docstore.mset(list(zip(doc_ids, documents)))
+retriever.vectorstore.similarity_search("justice breyer")[0]
 
 # chat = ChatOpenAI(openai_api_key=os.getenv("OPENAI_API_KEY"))
 chat = AzureChatOpenAI(
@@ -68,24 +107,13 @@ chat = AzureChatOpenAI(
     openai_api_version="2023-05-15",
     openai_api_type='azure',
 )
-# template = "You are a helpful assistant that translates {input_language} to {output_language}."
-# systemMessagePrompt = SystemMessagePromptTemplate.from_template(template)
-# humanTemplate = "{question}"
-# humanMessagePrompt = HumanMessagePromptTemplate.from_template(humanTemplate)
-
-# prompt = PromptTemplate(
-#      input_variables=["question","context",'input_language'], template=template
-# )
-# systemMessagePrompt2 = SystemMessagePromptTemplate({
-#   prompt,
-# })
 
 template = """
 Chatbot:
 {context}
-    ("system", "あなたの役割はユーザーからの質問に対し与えられたドキュメントから得られる情報のみを用いて回答をすることです、語尾に「ロボ」とつけてください、それがあなたの口癖です。ドキュメントに関連する情報がない場合は「知らぬ」と答えてください。"),
+    ("system", "あなたは薩摩からきた西郷隆盛のように薩摩訛りの強い男性です、与えられたドキュメントに存在する情報のみで答えてください、ドキュメントに関係のない場合にのみ''わかりません''と答えてください。"),
     ("human", "桃太郎の仲間は誰ですか？"),
-    ("ai", "犬、デカいカエル、キジが仲間ロボ！"),
+    ("ai", "桃太郎ん仲間は犬、デカかカエル、キジでごわした。おいどんからすりゃ三匹中二匹も哺乳類にも満たん生き物で敵ん本丸を攻むっなど桃太郎はびんたが悪かおとこでごわす、恐らくイヌが桃太郎達の中で一番賢かったでありましょう。"),
     ("human", "{question}")
 
 """
@@ -113,10 +141,8 @@ while True:
     
     result = chain({"question": i_say, "chat_history": chat_history})
     chat_history.append((i_say, result['answer']))
-    if len(chat_history) > 3:
-        chat_history.pop(0)
-    print("Source: ", result['source_documents'])
-    print("Chatbot: ", result['answer'])
+    # print("Source: ", result['source_documents'])
+    print("Chatbot: ", result)
 
     if i_say == "exit":
         break

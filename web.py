@@ -1,3 +1,5 @@
+
+
 from langchain.prompts import PromptTemplate
 from psychicapi import Psychic
 from langchain.docstore.document import Document
@@ -13,32 +15,18 @@ from langchain.storage import InMemoryStore
 import os
 import logging
 from dotenv import load_dotenv
+from langchain.document_loaders import AsyncChromiumLoader
+from langchain.text_splitter import CharacterTextSplitter
 
 logging.basicConfig(level=logging.INFO)
 load_dotenv(".env")
 
 del os.environ["OPENAI_API_BASE"]
 OpenAI_API_KEY = os.getenv("OPENAI_API_KEY")
-PSYCHIC_SECRET_KEY = os.getenv("PSYCHIC_SECRET_KEY")
-ACCOUNT_ID = os.getenv("ACCOUNT_ID")
-
-handler = StdOutCallbackHandler()
-
-psychic = Psychic(secret_key=PSYCHIC_SECRET_KEY)
-raw_docs = psychic.get_documents(account_id=ACCOUNT_ID).documents
-if raw_docs is None:
-    raise Exception("No docs found!")
-print(
-"Generating embeddings from your docs and inserting them into Chroma...")
-documents = [
-Document(
-    page_content=doc["content"],
-    metadata={
-    "title": doc["title"],
-    "source": doc["uri"]
-    },
-) for doc in raw_docs
-]
+loader = AsyncChromiumLoader(["https://digital-sol.nikon.com/products/cameras/specification/#camera_head"])
+html = loader.load()
+# bs_transformer = BeautifulSoupTransformer()
+# docs_transformed = bs_transformer.transform_documents(html,tags_to_extract=["p", "li", "div", "a","span","h1","h2","h3"])
 
 parent_splitter = RecursiveCharacterTextSplitter(chunk_size=400,chunk_overlap=50)
 child_splitter = RecursiveCharacterTextSplitter(chunk_size=150,chunk_overlap=20)
@@ -54,7 +42,7 @@ retriever = ParentDocumentRetriever(
     search_kwargs={"k": 3},
 )
 
-retriever.add_documents(documents,None)
+retriever.add_documents(html,None)
 
 # embeddings = OpenAIEmbeddings(model="text-embedding-ada-002",openai_api_key=OpenAI_API_KEY)
 # vdb = Chroma(persist_directory="./chroma_db", embedding_function=embeddings)
